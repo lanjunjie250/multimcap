@@ -12,7 +12,8 @@ for (const file of ['index.html', 'player.js']) await cp(path.join(root, file), 
 await cp(path.join(root, 'mcap'), path.join(dist, 'mcap'), {recursive: true});
 await cp(path.join(root, 'public'), dist, {recursive: true});
 const css = await readFile(path.join(shared, 'web/player.css'), 'utf8');
-await writeFile(path.join(dist, 'player.css'), css + '\n.file-open{display:flex;align-items:center;gap:10px}.local-privacy{font-size:12px;color:var(--muted)}.appbar{grid-template-columns:auto 1fr auto}@media(max-width:680px){.appbar{grid-template-columns:1fr}.file-open{flex-wrap:wrap}}\n');
+const browserCss = await readFile(path.join(root, 'player.css'), 'utf8');
+await writeFile(path.join(dist, 'player.css'), css + '\n' + browserCss);
 await mkdir(path.join(dist, 'analysis'), {recursive: true});
 for (const file of await readdir(path.join(shared, 'web/analysis'))) {
   let code = await readFile(path.join(shared, 'web/analysis', file), 'utf8');

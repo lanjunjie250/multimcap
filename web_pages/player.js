@@ -92,6 +92,19 @@ function showMessage(value,error=false){
   clearTimeout(messageTimer);messageTimer=setTimeout(()=>node.hidden=true,5000);
 }
 function setState(textValue,kind=''){$('#decode-state').className='state '+kind;$('#decode-state span').textContent=textValue;}
+function setImportProgress(file,value=null,status='正在建立索引'){
+  $('#import-progress').hidden=false;
+  $('#import-file-name').textContent=file.name;
+  $('#import-file-name').title=file.name;
+  $('#import-status').textContent=status;
+  const meter=$('#import-meter');
+  if(value===null)meter.removeAttribute('value');else meter.value=Math.max(0,Math.min(100,value));
+}
+function setInspectorOpen(value){
+  inspector.hidden=!value;
+  $('#inspector-button').setAttribute('aria-expanded',String(!!value));
+  if(!value&&inspector.contains(document.activeElement))$('#inspector-button').focus();
+}
 function lowerBound(values,target){let low=0,high=values.length;while(low<high){const mid=(low+high)>>1;if(values[mid]<target)low=mid+1;else high=mid;}return low;}
 function nearestKeyframe(stream,index){let result=0;for(const keyframe of stream.keyframes){if(keyframe>index)break;result=keyframe;}return result;}
 function frameAtOrBefore(stream,time){return Math.max(0,Math.min(stream.times.length-1,lowerBound(stream.times,time+0.000001)-1));}
@@ -251,7 +264,7 @@ class StreamPlayer{
 
 function setFocusedPlayer(player){
   focusedPlayer=player;grid.classList.toggle('focused',!!player);
-  for(const item of players){const active=item===player;item.tile.classList.toggle('focused-tile',active);item.tile.hidden=!!player&&!active;item.tile.querySelector('.tile-focus').textContent=active?'▣':'□';item.tile.querySelector('.tile-focus').title=active?'恢复多路':'放大';}
+  for(const item of players){const active=item===player;item.tile.classList.toggle('focused-tile',active);item.tile.hidden=!!player&&!active;item.tile.querySelector('.tile-focus').textContent=active?'▣':'□';item.tile.querySelector('.tile-focus').title=active?'恢复多路':'单路查看';item.tile.querySelector('.tile-focus').setAttribute('aria-label',active?'恢复多路':'单路查看');item.tile.querySelector('.tile-focus').setAttribute('aria-pressed',String(active));}
   refreshAnalysis();
   updateShowcase();
 }
@@ -362,6 +375,7 @@ function updateTimelineTracks(){
   $('.timeline-scroll').scrollTop=0;resizeTimeline();
 }
 function resizeTimeline(){
+  if(!timeline.getBoundingClientRect().width)return;
   const ratio=devicePixelRatio||1,rect=timeline.getBoundingClientRect(),width=Math.max(1,Math.round(rect.width*ratio)),height=Math.max(1,Math.round(rect.height*ratio));
   if(timeline.width!==width||timeline.height!==height){timeline.width=width;timeline.height=height;}drawTimeline();
 }
@@ -474,9 +488,9 @@ function updateDecodeState(){
 function installRecording(data){
   recording=data;
   $('#hand-camera').replaceChildren(new Option('全部可见相机','all'),...data.streams.map(stream=>new Option(stream.label,String(stream.id))));
-  timelineZoom=1;timelineStart=0;inspector.hidden=true;
+  timelineZoom=1;timelineStart=0;setInspectorOpen(false);
   $('#download-merged-button').hidden=true;
-  $('#recording-name').textContent=data.name;$('#recording-path').textContent=data.path;
+  $('#recording-name').textContent=data.name;$('#recording-name').title=data.name;$('#recording-path').textContent=data.path;$('#recording-path').title=data.path;
   $('#fact-duration').textContent=formatTime(data.duration);$('#fact-size').textContent=formatBytes(data.size_bytes);
   $('#fact-messages').textContent=data.message_count.toLocaleString();$('#fact-start').textContent=new Date(Number(BigInt(data.start_timestamp_ns)/1000000n)).toLocaleString();
   $('#fact-common').textContent=data.alignment.common_frames.toLocaleString();$('#fact-span').textContent=data.alignment.common_frames?formatIntervalNs(data.alignment.max_span_ns):'—';
@@ -489,11 +503,21 @@ async function openLocalFile(file){
   const controller=new AbortController();importController=controller;
   setPlaying(false);stopPlayers();hands.disable();$('#hand-enabled').checked=false;$('#hand-state').textContent='已关闭';
   localRecording?.close();localRecording=null;recording=null;
+  setTimestampExpanded(false);setInspectorOpen(false);
   playerRoot.hidden=true;emptyState.hidden=false;$('#inspector-button').disabled=true;
+  $('#open-card').dataset.status='loading';
+  $('#open-feedback').textContent='正在本机读取文件，录像不会上传';
+  setImportProgress(file);
   cancelImport.hidden=false;setState('正在本地建立索引');
   let candidate=null;
   try{
-    candidate=await LocalRecording.open(file,{signal:controller.signal,onProgress:({bytes,total})=>setState('本地索引 '+Math.floor(bytes/total*100)+'%')});
+    candidate=await LocalRecording.open(file,{signal:controller.signal,onProgress:({bytes,total})=>{
+      if(importController!==controller)return;
+      const percent=total>0?Math.floor(bytes/total*100):null;
+      setState(percent===null?'正在本地建立索引':'本地索引 '+percent+'%');
+      setImportProgress(file,percent,percent===null?'正在建立索引':percent+'%');
+    }});
+    if(importController===controller)setImportProgress(file,100,'正在检查解码支持');
     const data=candidate.metadata,support=new Map();
     for(const codec of new Set(data.streams.map(stream=>stream.web_codec))){
       if(!('VideoDecoder' in window))continue;
@@ -501,7 +525,7 @@ async function openLocalFile(file){
         try{if((await VideoDecoder.isConfigSupported({codec,optimizeForLatency:true,hardwareAcceleration:preference})).supported){support.set(codec,preference);break;}}catch(_){}
       }
     }
-    if(controller.signal.aborted){candidate.close();return;}
+    if(controller.signal.aborted)throw new DOMException('已取消','AbortError');
     if(!support.size)throw Error('此浏览器不支持录制的视频编码，请尝试 Chrome/Edge 或原本地播放器');
     localRecording=candidate;candidate=null;installRecording(data);
     for(let i=0;i<data.streams.length;i++)players.push(new StreamPlayer(data.streams[i],i,support.get(data.streams[i].web_codec)));
@@ -510,31 +534,53 @@ async function openLocalFile(file){
   }catch(error){
     candidate?.close();
     if(importController!==controller)return;
-    if(error.name==='AbortError'){setState('已取消打开');return;}
+    if(error.name==='AbortError'){setState('已取消打开');$('#open-feedback').textContent='已取消，可重新选择本机 MCAP';return;}
     stopPlayers();localRecording?.close();localRecording=null;recording=null;
-    playerRoot.hidden=true;emptyState.hidden=false;setState('打开失败','error');showMessage(error.message,true);
+    playerRoot.hidden=true;emptyState.hidden=false;$('#open-card').dataset.status='error';$('#open-feedback').textContent=error.message;setState('打开失败','error');showMessage(error.message,true);
   }finally{
-    if(importController===controller){cancelImport.hidden=true;importController=null;localFileInput.value='';}
+    if(importController===controller){$('#import-progress').hidden=true;if($('#open-card').dataset.status==='loading')delete $('#open-card').dataset.status;cancelImport.hidden=true;importController=null;localFileInput.value='';}
   }
 }
 localFileButton.addEventListener('click',()=>localFileInput.click());
+for(const button of document.querySelectorAll('[data-open-file]'))button.addEventListener('click',()=>localFileInput.click());
 localFileInput.addEventListener('change',()=>openLocalFile(localFileInput.files[0]));
 cancelImport.addEventListener('click',()=>importController?.abort());
+for(const button of document.querySelectorAll('[data-cancel-import]'))button.addEventListener('click',()=>importController?.abort());
 window.rtcameraTrial={get metadata(){return recording;},get frames(){return players.map(p=>({stream:p.stream.id,index:p.currentIndex,key:p.currentKey}));}};
-$('#inspector-button').addEventListener('click',()=>inspector.hidden=!inspector.hidden);$('#inspector-close').addEventListener('click',()=>inspector.hidden=true);
+$('#inspector-button').addEventListener('click',()=>setInspectorOpen(inspector.hidden));$('#inspector-close').addEventListener('click',()=>setInspectorOpen(false));
 playButton.addEventListener('click',()=>setPlaying(!playing));$('#back-button').addEventListener('click',()=>seek(playhead-1));$('#forward-button').addEventListener('click',()=>seek(playhead+1));
 $('#prev-frame-button').addEventListener('click',()=>stepFrame(-1));$('#next-frame-button').addEventListener('click',()=>stepFrame(1));
 $('#prev-issue-button').addEventListener('click',()=>jumpIssue(-1));$('#next-issue-button').addEventListener('click',()=>jumpIssue(1));
 $('#timeline-zoom-out').addEventListener('click',()=>zoomTimeline(0.5));$('#timeline-zoom-reset').addEventListener('click',()=>{timelineZoom=1;timelineStart=0;updateScrubberWindow();drawTimeline();});$('#timeline-zoom-in').addEventListener('click',()=>zoomTimeline(2));
 $('#timestamp-zoom-out').addEventListener('click',()=>setTimestampScale(timestampScale/1.2));$('#timestamp-zoom-reset').addEventListener('click',()=>setTimestampScale(1));$('#timestamp-zoom-in').addEventListener('click',()=>setTimestampScale(timestampScale*1.2));$('#timestamp-expand').addEventListener('click',()=>setTimestampExpanded(!$('#sensor-panel').classList.contains('expanded')));
 $('#timeline-filter').addEventListener('change',updateTimelineTracks);
+function setTimelineExpanded(expanded){
+  $('#timeline-tracks').hidden=!expanded;
+  $('#timeline-toggle').textContent=expanded?'收起轨道':'展开轨道';
+  $('#timeline-toggle').setAttribute('aria-expanded',String(expanded));
+  if(expanded)resizeTimeline();
+}
+$('#timeline-toggle').addEventListener('click',()=>setTimelineExpanded($('#timeline-tracks').hidden));
+if(matchMedia('(max-width: 680px)').matches)setTimelineExpanded(false);
 $('.timeline-scroll').addEventListener('wheel',event=>{if(event.ctrlKey){event.preventDefault();zoomTimeline(event.deltaY<0?2:0.5);}},{passive:false});
 scrubber.addEventListener('input',()=>scheduleSeek(scrubber.value));scrubber.addEventListener('change',()=>{clearTimeout(seekTimer);seek(scrubber.value);});
 function commitTime(){const input=$('#time-input'),value=parseTime(input.value);if(value===null){showMessage('时间格式无效',true);input.value=formatTime(playhead);}else{seek(value);input.value=formatTime(playhead);}}
 $('#time-input').addEventListener('change',commitTime);
 $('#time-input').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commitTime();event.target.blur();}});
 $('#speed-select').addEventListener('change',event=>{const wasPlaying=playing;setPlaying(false);rate=Number(event.target.value);if(wasPlaying)setPlaying(true);});
-window.addEventListener('keydown',event=>{if(event.target instanceof Element&&event.target.matches('input,select'))return;if(event.key==='Escape'&&$('#sensor-panel').classList.contains('expanded'))setTimestampExpanded(false);else if(event.code==='Space'){event.preventDefault();setPlaying(!playing);}else if(event.key==='ArrowLeft')stepFrame(-1);else if(event.key==='ArrowRight')stepFrame(1);});
+window.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){
+    if($('#sensor-panel').classList.contains('expanded'))setTimestampExpanded(false);
+    else if(!inspector.hidden)setInspectorOpen(false);
+    else if(focusedPlayer)setFocusedPlayer(null);
+    return;
+  }
+  if(event.target instanceof Element&&event.target.closest('input,select,button,a,summary,textarea,[contenteditable="true"]'))return;
+  if(!recording)return;
+  if(event.code==='Space'){event.preventDefault();setPlaying(!playing);}
+  else if(event.key==='ArrowLeft'){event.preventDefault();stepFrame(-1);}
+  else if(event.key==='ArrowRight'){event.preventDefault();stepFrame(1);}
+});
 let dragDepth=0;const dropOverlay=$('#drop-overlay');
 window.addEventListener('dragenter',event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();dragDepth++;dropOverlay.hidden=false;}});
 window.addEventListener('dragover',event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect='copy';}});
