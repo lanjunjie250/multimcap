@@ -10,7 +10,7 @@
 
 首轮试用按 **Cloudflare Pages Direct Upload，本地构建并手动上传**准备。用户随后通过 Cloudflare Workers 发布了[在线试用站点](https://bitter-fog-bed8.lanjunjiezj.workers.dev/)。
 
-后续 GitHub 自动部署的准备配置已补充为 Workers Builds：`web_pages/wrangler.json`，部署命名已确定：Worker 为 `multimcap`，账号子域名由 `lanjunjiezj` 改为 `rtcamera`，目标地址为 `https://multimcap.rtcamera.workers.dev/`。详见 [GitHub 自动部署说明](../../web_pages/README.md#github-自动部署到-cloudflare-workers)。这表示已准备源码配置；尚未替用户连接 GitHub、重命名线上 Worker 或发布到新地址。
+后续 GitHub 自动部署的准备配置已补充为 Workers Builds：`web_pages/wrangler.json`，部署命名已确定：Worker 为 `multimcap`，账号子域名由 `lanjunjiezj` 改为 `rtcamera`，目标地址为 `https://multimcap.rtcamera.workers.dev/`。详见 [GitHub 自动部署说明](../../web_pages/README.md#github-自动部署到-cloudflare-workers)。源码已推送至 GitHub 仓库 `lanjunjie250/multimcap` 的 `main` 分支；Cloudflare 尚未绑定该仓库，也未修改线上账号子域名、重命名 Worker 或发布到新地址。
 
 - 新入口和操作说明：[web_pages/README.md](../../web_pages/README.md)。
 - 验证记录：[web_pages/VERIFICATION.md](../../web_pages/VERIFICATION.md)。

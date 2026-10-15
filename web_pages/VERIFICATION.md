@@ -9,7 +9,8 @@
 - `wrangler.json` 指向有效的 `dist/`，包含首页和 404 页；Worker 目标名已更新为 `multimcap`，目标账号子域名为 `rtcamera`。
 - 本轮构建产物与原 Direct Upload ZIP 逐文件一致。README、构建入口和部署配置未改变播放器发布内容。
 - Cloudflare 部署说明固定 Wrangler 4.151.0，并要求 Node.js 22+；本机 Node.js 20 仅用于构建验证，未运行 Wrangler 云端部署。
-- 尚未连接 GitHub 仓库、修改线上账号子域名、重命名线上 Worker 或发布到目标地址 `https://multimcap.rtcamera.workers.dev/`。
+- SSH 认证通过，源码已推送到 GitHub 仓库 `lanjunjie250/multimcap` 的 `main` 分支；首次源码提交为 `314981b`。
+- Cloudflare 尚未绑定 GitHub 仓库、修改线上账号子域名、重命名线上 Worker 或发布到目标地址 `https://multimcap.rtcamera.workers.dev/`。
 
 ## 解析和文件读取
 

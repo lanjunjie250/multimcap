@@ -10,7 +10,7 @@
 
 ## GitHub 自动部署到 Cloudflare Workers
 
-源码仓库：[lanjunjie250/multimcap](https://github.com/lanjunjie250/multimcap)，远端地址为 `https://github.com/lanjunjie250/multimcap.git`。
+源码仓库：[lanjunjie250/multimcap](https://github.com/lanjunjie250/multimcap)，SSH 远端地址为 `git@github.com:lanjunjie250/multimcap.git`。
 
 这条路径使用 GitHub 保存源码，由 Cloudflare Workers Builds 构建并托管网站。自动部署和 Worker 改名是两个独立步骤，接入仓库后仍需在控制台修改站点名称。
 
