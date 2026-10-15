@@ -1,0 +1,7 @@
+dist/
+release/
+.cache/
+node_modules/
+*.mcap
+*.zip
+build-manifest.json

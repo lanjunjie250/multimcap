@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Run from a checkout or a CMake-installed bin directory."""
+from pathlib import Path
+import sys
+
+source = Path(__file__).resolve().parents[1]
+if (source / 'rtcamera_offline').is_dir():
+    sys.path.insert(0, str(source))
+from rtcamera_offline.__main__ import main
+
+main()

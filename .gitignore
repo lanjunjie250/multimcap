@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.wrangler/
+*.mcap
+*.zip
+*.egg-info/
+data_pipeline/offline/build/

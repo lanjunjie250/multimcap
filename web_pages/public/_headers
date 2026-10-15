@@ -1,0 +1,13 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/*
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/assets/wasm/*.wasm
+  Content-Type: application/wasm
+
+/assets/hand_landmarker.task
+  Content-Type: application/octet-stream

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RTCamera Offline</title>
+<link rel="stylesheet" href="/mcap_player.css">
+</head>
+<body>
+<header class="appbar">
+  <div class="brand"><strong>RTCamera</strong><span>OFFLINE</span></div>
+  <div class="file-open">
+    <button id="local-file-button" class="button primary" type="button">打开本机文件</button>
+    <input id="local-file-input" type="file" accept=".mcap,.zip,application/zip,application/octet-stream" hidden>
+    <button id="file-menu-button" class="button secondary" type="button">服务器文件</button>
+    <input id="file-path" aria-label="服务器录制文件路径" placeholder="服务器上的 .mcap 或 .zip 路径">
+    <button id="open-button" class="button secondary" type="button">打开路径</button>
+  </div>
+  <div class="app-actions">
+    <button id="inspector-button" class="icon-button" type="button" title="文件信息" aria-label="文件信息" disabled>ⓘ</button>
+    <div id="decode-state" class="state"><i></i><span>等待文件</span></div>
+  </div>
+</header>
+
+<aside id="file-menu" class="file-menu" hidden>
+  <div class="file-menu-head"><strong>服务器 MCAP</strong><button id="file-menu-close" class="icon-button" title="关闭" aria-label="关闭">×</button></div>
+  <div id="file-list" class="file-list"><div class="empty">正在扫描文件...</div></div>
+</aside>
+
+<aside id="inspector" class="inspector" hidden>
+  <div class="file-menu-head"><strong>文件检查</strong><button id="inspector-close" class="icon-button" title="关闭" aria-label="关闭">×</button></div>
+  <section class="inspection-section">
+    <h2>文件信息</h2>
+    <div id="file-summary" class="file-summary"></div>
+  </section>
+  <section class="inspection-section">
+    <h2>时间对齐</h2>
+    <div id="alignment-summary" class="alignment-summary"></div>
+  </section>
+  <section class="inspection-section">
+    <h2>Topics</h2>
+    <div id="topic-list" class="topic-list"></div>
+  </section>
+</aside>
+
+<main>
+  <section id="empty-state" class="empty-stage">
+    <div><strong>选择一段录制</strong><span>打开 MCAP 或录制 ZIP，也可拖到这里。</span></div>
+  </section>
+
+  <section id="player" class="player" hidden>
+    <div class="recording-strip">
+      <div class="recording-title"><strong id="recording-name"></strong><span id="recording-path"></span><button id="download-merged-button" class="button secondary" type="button" title="下载按公共同步帧合并的 MCAP" hidden>下载合并 MCAP</button></div>
+      <dl class="recording-facts">
+        <div><dt>时长</dt><dd id="fact-duration">--</dd></div>
+        <div><dt>大小</dt><dd id="fact-size">--</dd></div>
+        <div><dt>消息</dt><dd id="fact-messages">--</dd></div>
+        <div><dt>开始时间</dt><dd id="fact-start">--</dd></div>
+        <div><dt>公共帧</dt><dd id="fact-common">--</dd></div>
+        <div><dt>最大偏差</dt><dd id="fact-span">--</dd></div>
+        <div><dt>当前公共帧</dt><dd id="fact-current-frame">--</dd></div>
+        <div><dt>当前同帧偏差</dt><dd id="fact-current-span">--</dd></div>
+      </dl>
+    </div>
+
+    <section class="analysis-bar" aria-label="图像分析">
+      <label><input type="checkbox" id="hand-enabled"> 手部关键点</label>
+      <label>相机 <select id="hand-camera"><option value="all">全部可见相机</option></select></label>
+      <label>最多手数 <select id="hand-count"><option>1</option><option selected>2</option><option>4</option></select></label>
+      <span id="hand-state" role="status">已关闭</span>
+      <details><summary>检测诊断</summary><pre id="hand-diagnostics">开启后显示运行后端与图形设备。</pre></details>
+      <button id="showcase-toggle" class="button secondary" type="button" aria-pressed="false">录屏展示</button>
+      <button id="video-fullscreen" class="button secondary" type="button" aria-pressed="false">画面全屏</button>
+    </section>
+    <div id="video-grid" class="video-grid"></div>
+
+    <aside id="showcase-evidence" class="showcase-evidence" aria-label="当前画面时间戳" hidden>
+      <div class="showcase-heading"><span>RTCamera · MULTI VIEW</span><h1>多视角 · 同帧时序</h1><p id="showcase-source"></p></div>
+      <div class="showcase-metric"><span>当前画面 · 同帧时间戳跨度</span><strong id="showcase-span">—</strong><p id="showcase-status">等待画面</p></div>
+      <div id="showcase-readouts" class="showcase-readouts"></div>
+      <p class="showcase-note">录制时间戳（秒），保留 9 位小数。<br>跨度 = 同帧最大时间戳 − 最小时间戳。<br>展示相机间时间对齐，不代表绝对时钟精度。</p>
+    </aside>
+
+    <section id="sensor-panel" class="sensor-panel collapsed" aria-label="当前消息时间戳">
+      <div class="sensor-panel-head">
+        <div class="sensor-panel-title"><strong>当前消息</strong><span id="timestamp-focus-summary">--</span><span>时间戳为 MCAP publish_time，相邻间隔按同一路源计算</span></div>
+        <div class="timestamp-tools">
+          <button id="timestamp-toggle" class="button secondary" type="button" aria-expanded="false" aria-controls="sensor-readouts">展开时间戳</button>
+          <button id="timestamp-zoom-out" class="icon-button" type="button" title="缩小时间戳文字" aria-label="缩小时间戳文字">−</button>
+          <button id="timestamp-zoom-reset" class="icon-button timestamp-zoom-reset" type="button" title="恢复时间戳文字大小" aria-label="恢复时间戳文字大小">1×</button>
+          <button id="timestamp-zoom-in" class="icon-button" type="button" title="放大时间戳文字" aria-label="放大时间戳文字">+</button>
+          <button id="timestamp-expand" class="icon-button" type="button" title="单独查看时间戳" aria-label="单独查看时间戳" aria-pressed="false">⛶</button>
+        </div>
+      </div>
+      <div id="sensor-readouts" class="sensor-readouts"></div>
+    </section>
+
+    <section class="transport" aria-label="播放控制">
+      <div class="transport-row">
+        <button id="back-button" class="icon-button transport-button" title="后退 1 秒" aria-label="后退 1 秒">−1s</button>
+        <button id="prev-frame-button" class="icon-button transport-button" title="上一帧" aria-label="上一帧">|◀</button>
+        <button id="play-button" class="play-button" title="播放" aria-label="播放"><span class="play-symbol">▶</span></button>
+        <button id="next-frame-button" class="icon-button transport-button" title="下一帧" aria-label="下一帧">▶|</button>
+        <button id="forward-button" class="icon-button transport-button" title="前进 1 秒" aria-label="前进 1 秒">+1s</button>
+        <div class="clock"><span id="current-time">00:00.000</span><i>/</i><span id="total-time">00:00.000</span></div>
+        <label class="time-entry"><span>定位</span><input id="time-input" inputmode="decimal" value="00:00.000" aria-label="输入播放时间"></label>
+        <div class="issue-nav"><button id="prev-issue-button" class="icon-button" title="上一个丢帧点" aria-label="上一个丢帧点">‹!</button><span id="issue-count">0 个问题</span><button id="next-issue-button" class="icon-button" title="下一个丢帧点" aria-label="下一个丢帧点">!›</button></div>
+        <label class="speed"><span>速度</span><select id="speed-select"><option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="5">5×</option></select></label>
+      </div>
+      <div class="timeline-tools">
+        <label class="timeline-filter">轨道 <select id="timeline-filter" aria-label="时间轴轨道类型"><option value="all">全部</option><option value="video">视频</option><option value="imu">IMU</option><option value="sensor">编码器</option></select></label>
+        <span id="timeline-window">全时段</span>
+        <button id="timeline-zoom-out" class="icon-button" type="button" title="缩小时间轴" aria-label="缩小时间轴">−</button>
+        <button id="timeline-zoom-reset" class="icon-button" type="button" title="显示完整时间轴" aria-label="显示完整时间轴">1:1</button>
+        <button id="timeline-zoom-in" class="icon-button" type="button" title="放大时间轴" aria-label="放大时间轴">+</button>
+      </div>
+      <div class="timeline-scroll" tabindex="0" aria-label="可滚动的时间轴轨道">
+      <div class="timeline-wrap">
+        <canvas id="timeline" aria-label="录制时间轴"></canvas>
+        <input id="scrubber" type="range" min="0" max="1" value="0" step="0.001" aria-label="播放位置">
+      </div>
+      </div>
+      <div id="timeline-legend" class="timeline-legend"></div>
+      <div class="playback-health"><span id="performance-state">--</span><span id="frame-state">--</span></div>
+    </section>
+  </section>
+</main>
+
+<div id="message" class="message" role="status" hidden></div>
+<div id="drop-overlay" class="drop-overlay" hidden><strong>松开以打开录制文件</strong></div>
+<script type="module" src="/mcap_player.js"></script>
+</body>
+</html>

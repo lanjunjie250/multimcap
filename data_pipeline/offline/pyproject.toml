@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtcamera-offline"
+version = "0.1.0"
+description = "Local MCAP timeline playback with optional hand landmarks"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+decode = ["opencv-python-headless>=4.8"]
+
+[project.scripts]
+rtcamera-offline = "rtcamera_offline.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["rtcamera_offline*"]
+
+[tool.setuptools.package-data]
+rtcamera_offline = ["web/*", "web/analysis/*", "assets.json"]
