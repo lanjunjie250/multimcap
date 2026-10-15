@@ -2,17 +2,15 @@
 
 更新：2026-10-15。程序和模型打包为静态文件，MCAP 使用浏览器本地 File API 读取。当前试用站点部署在 Cloudflare Workers；同一份静态产物也支持 Cloudflare Pages Direct Upload。
 
-**在线试用：[RTCamera 网页播放器](https://bitter-fog-bed8.lanjunjiezj.workers.dev/)**
+**在线试用：[MultiMCAP 网页播放器](https://multimcap.rtcamera.workers.dev/)**
 
-目标部署地址：[MultiMCAP](https://multimcap.rtcamera.workers.dev/)（尚未完成线上修改）。Worker 名称确定为 `multimcap`，账号子域名确定为 `rtcamera`。
-
-当前地址中的 `bitter-fog-bed8` 是 Worker 名称，`lanjunjiezj` 是账号的 Workers 子域名。在 Cloudflare **Workers & Pages** 首页，点击 **Your subdomain → Change** 可修改账号子域名，这会影响该账号下所有 Worker 的 `workers.dev` 地址。单个 Worker 的名称另行设置；如果使用自己的完整域名，则绑定自定义域名。
+当前 Worker 名称为 `multimcap`，账号子域名为 `rtcamera`。账号子域名由 Cloudflare 控制台管理，修改它会影响该账号下所有 Worker 的 `workers.dev` 地址。
 
 ## GitHub 自动部署到 Cloudflare Workers
 
 源码仓库：[lanjunjie250/multimcap](https://github.com/lanjunjie250/multimcap)，SSH 远端地址为 `git@github.com:lanjunjie250/multimcap.git`。
 
-这条路径使用 GitHub 保存源码，由 Cloudflare Workers Builds 构建并托管网站。自动部署和 Worker 改名是两个独立步骤，接入仓库后仍需在控制台修改站点名称。
+这条路径使用 GitHub 保存源码，由 Cloudflare Workers Builds 构建并托管网站。自动部署使用仓库根目录的 `package.json` 和 `wrangler.json`。
 
 部署使用以下名称：
 
@@ -22,10 +20,10 @@
 | 账号 Workers 子域名 | `rtcamera` |
 | 目标网址 | `https://multimcap.rtcamera.workers.dev/` |
 
-**已更新本地配置，尚未执行线上修改。** `wrangler.json` 仅配置 Worker 名称，账号子域名需在 Cloudflare 控制台修改并确认可用。Cloudflare 控制台中的 Worker 名称必须与配置一致。
+`wrangler.json` 的 `name` 必须与控制台的 Worker 名称一致。发布目录固定为 `web_pages/dist/`。
 
 1. 将项目源码推送到上述仓库的 `main` 分支。需要保留整个 `web_pages/` 源码及 `data_pipeline/offline/rtcamera_offline/` 中的共享分析模块、CSS 和 `assets.json`；不要只上传 `dist/` 或发布 ZIP。模型和 WASM 会在构建时按固定版本下载、校验，不需要提交缓存目录。
-2. 进入 [Cloudflare Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)，在首页通过 **Your subdomain → Change** 将账号子域名改为 `rtcamera`，再打开当前的 `bitter-fog-bed8` Worker，将 Worker 名称改为 `multimcap`。以上操作会改变访问地址；确认 `https://multimcap.rtcamera.workers.dev/` 可用后，将 README 的在线试用链接切换到该地址。
+2. 进入 [Cloudflare Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)，打开 `multimcap` Worker。
 3. 在该 Worker 中进入 **Settings → Builds → Connect**，授权并选择 GitHub 仓库 `lanjunjie250/multimcap`。
 4. 设置以下构建参数，保存并触发一次部署：
 
@@ -33,19 +31,23 @@
 | --- | --- |
 | Root directory | 仓库根目录 `.` |
 | Production branch | `main` |
-| Build command | `npm --prefix web_pages run build:cloudflare` |
-| Deploy command | `npx wrangler@4.151.0 deploy --config web_pages/wrangler.json` |
-| Preview command（启用预览时） | `npx wrangler@4.151.0 preview --config web_pages/wrangler.json` |
+| Build command | 留空；Wrangler 的构建钩子会运行 `npm run build` |
+| Deploy command | `npx wrangler@4.151.0 deploy` |
+| Preview command（启用预览时） | `npx wrangler@4.151.0 preview` |
 | Environment variable | `NODE_VERSION=22` |
 | Build environment | Node.js 22+、Python 3 |
 
 部署工具固定为 Wrangler 4.151.0，要求 Node.js 22+；本地仅构建仍支持 Node.js 20+。
 
-根目录保持为仓库根目录，构建才能读取 `data_pipeline/` 下的共享资源。`wrangler.json` 只发布 `web_pages/dist/`，不部署 Python 后端。构建命令会准备并校验资源、运行解析测试、生成静态文件。
+根目录保持为仓库根目录，构建才能读取 `data_pipeline/` 下的共享资源。仓库根目录的 `wrangler.json` 配置了构建钩子和 `web_pages/dist/` 发布目录，默认部署命令会准备并校验资源、运行解析测试、生成静态文件。保留 `web_pages/wrangler.json` 兼容已有的显式 `--config web_pages/wrangler.json` 配置，该入口同样会先构建。
+
+**检查 Deploy command 中是否存在 `--assets` 参数。请使用表中的完整命令，移除 `--assets web_pages`、`--assets .` 等源码目录覆盖参数。** 此类参数会覆盖配置文件的发布目录。直接发布 `web_pages/` 会缺少构建生成的 CSS、`analysis/` 和模型资源，造成页面样式异常、脚本 404。
+
+构建完成后，`web_pages/dist/` 应有 `index.html`、`player.css`、`analysis/`、`mcap/` 和 `assets/`。上线后检查 `/player.css`、`/analysis/scheduler.js`、`/assets/manifest.json` 均返回 200；`/package.json` 和 `/wrangler.json` 应返回 404。
 
 连接完成后，向生产分支推送代码会触发 Cloudflare 构建和发布，不必再手动上传 ZIP，也不需要在 GitHub Actions 中配置 Cloudflare Token。
 
-官方说明：[Workers Builds 与现有 Worker 绑定 GitHub](https://developers.cloudflare.com/workers/ci-cd/builds/)、[workers.dev 地址规则](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)、[构建环境](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)。
+官方说明：[Wrangler 构建钩子](https://developers.cloudflare.com/workers/wrangler/custom-builds/)、[Workers Builds 与现有 Worker 绑定 GitHub](https://developers.cloudflare.com/workers/ci-cd/builds/)、[workers.dev 地址规则](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)、[构建环境](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)。
 
 ## 本地打包后上传到 Cloudflare Pages
 

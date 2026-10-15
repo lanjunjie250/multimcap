@@ -4,9 +4,7 @@
 
 源码仓库：[lanjunjie250/multimcap](https://github.com/lanjunjie250/multimcap)。
 
-**在线试用：[RTCamera 网页播放器](https://bitter-fog-bed8.lanjunjiezj.workers.dev/)**
-
-目标部署地址：[MultiMCAP](https://multimcap.rtcamera.workers.dev/)（待完成 Cloudflare 改名与部署）。
+**在线试用：[MultiMCAP 网页播放器](https://multimcap.rtcamera.workers.dev/)**
 
 网页版在浏览器中读取本地 `.mcap`，录像不会上传到服务器。当前试用版支持单个未压缩 MCAP，ZIP 和分段录像请使用下方的 Python 本地版。
 
@@ -28,7 +26,7 @@ python3 data_pipeline/offline/scripts/rtcamera-offline serve \
 
 ## 纯前端网页版
 
-当前试用站点部署在 Cloudflare Workers，已准备 GitHub 自动部署配置。也可将相同静态文件手动上传到 Cloudflare Pages。
+当前试用站点部署在 Cloudflare Workers，源码由 GitHub 管理。仓库根目录运行 `npm run build` 可生成完整站点；默认 `wrangler deploy` 会先构建，再发布 `web_pages/dist/`。也可将相同静态文件手动上传到 Cloudflare Pages。
 
 - [GitHub 自动部署到 Cloudflare Workers](web_pages/README.md#github-自动部署到-cloudflare-workers)
 - [试用与手动上传说明](web_pages/README.md)

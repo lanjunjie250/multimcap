@@ -1,0 +1,15 @@
+{
+  "name": "multimcap",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm --prefix web_pages run build:cloudflare",
+    "test": "npm --prefix web_pages test",
+    "preview": "npm --prefix web_pages run preview",
+    "deploy": "npx wrangler@4.151.0 deploy",
+    "build:cloudflare": "npm run build"
+  }
+}

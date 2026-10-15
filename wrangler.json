@@ -1,0 +1,13 @@
+{
+  "name": "multimcap",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./web_pages/dist",
+    "not_found_handling": "404-page"
+  },
+  "build": {
+    "command": "npm run build",
+    "cwd": "."
+  }
+}

@@ -2,15 +2,28 @@
 
 日期：2026-10-15。此记录区分代码/本地验证与实际云端部署。首轮代码验证没有登录 Cloudflare、没有发布站点、没有上传录像到外部服务器。用户随后提供了已自行部署的 Workers 试用站点；以下单列本轮配置验证。
 
+## 新域名部署排查（2026-10-15）
+
+- `https://multimcap.rtcamera.workers.dev/` 通过当前代理连接返回 200 和播放器 HTML。
+- `/player.js`、`/mcap/session.js` 等源文件返回 200；`/player.css`、`/analysis/` 全部模块、`/assets/` 下的模型和 WASM 返回 404。
+- `/package.json`、`/wrangler.json`、`/README.md` 返回源码目录中的文件，表明线上发布了 `web_pages/` 源码目录，未包含构建生成的资源。尚不能从公开网页确认控制台的具体 Build/Deploy command。
+- 新增仓库根目录 `package.json` 和 `wrangler.json`。默认部署使用构建钩子先构建，再发布 `web_pages/dist/`；原 `web_pages/wrangler.json` 同样补充构建钩子以兼容旧入口。
+- 控制台 Deploy command 如果显式使用 `--assets web_pages` 或 `--assets .`，会覆盖配置文件；需要按 README 改为默认部署命令。
+- 当前环境中新域名直连连接失败，GitHub 直连也超时；该环境依赖代理，不能据此确定其他大陆运营商/设备的可访问性。用户之前实测 `pages.dev` 可访问，`workers.dev` 不可访问。
+- 修复验证：仓库根目录 `npm run build` 通过（7 项资源校验、9 项测试、23 个静态文件）；两个 Wrangler 配置通过官方 4.151.0 JSON Schema 校验，并指向同一个完整发布目录。
+- 当前线上 `player.js` 与完整构建中的版本相同，进一步支持缺少生成文件而非播放器源码版本错误的判断。
+- 这次完整构建仍与原 Direct Upload ZIP 逐文件一致；已确认必要的 CSS、分析脚本、模型存在，源码配置未进入发布目录。
+- 修复后的云端资源状态仍需部署后再次检查；不将本地构建通过等同于线上修复完成。
+
 ## GitHub 自动部署配置验证（2026-10-15）
 
 - 用户提供的[现有 Workers 试用地址](https://bitter-fog-bed8.lanjunjiezj.workers.dev/)返回播放器 HTML；此项仅验证入口响应，不等同于完整云端功能回归。
 - `npm run build:cloudflare` 通过：7 项固定资源校验、9 项解析测试、23 个静态文件构建。
-- `wrangler.json` 指向有效的 `dist/`，包含首页和 404 页；Worker 目标名已更新为 `multimcap`，目标账号子域名为 `rtcamera`。
+- 根目录 `wrangler.json` 指向 `web_pages/dist/`，兼容配置 `web_pages/wrangler.json` 指向同一目录，包含首页和 404 页；Worker 目标名已更新为 `multimcap`，目标账号子域名为 `rtcamera`。
 - 本轮构建产物与原 Direct Upload ZIP 逐文件一致。README、构建入口和部署配置未改变播放器发布内容。
 - Cloudflare 部署说明固定 Wrangler 4.151.0，并要求 Node.js 22+；本机 Node.js 20 仅用于构建验证，未运行 Wrangler 云端部署。
 - SSH 认证通过，源码已推送到 GitHub 仓库 `lanjunjie250/multimcap` 的 `main` 分支；首次源码提交为 `314981b`。
-- Cloudflare 尚未绑定 GitHub 仓库、修改线上账号子域名、重命名线上 Worker 或发布到目标地址 `https://multimcap.rtcamera.workers.dev/`。
+- 用户已在新域名发布页面；完整构建资源是否正确发布按上面的线上排查记录单独验收。
 
 ## 解析和文件读取
 
