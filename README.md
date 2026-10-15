@@ -6,7 +6,7 @@
 
 **在线试用：[MultiMCAP 网页播放器](https://multimcap.rtcamera.workers.dev/)**
 
-网页版在浏览器中读取本地 `.mcap`，录像不会上传到服务器。当前试用版支持单个未压缩 MCAP，ZIP 和分段录像请使用下方的 Python 本地版。
+网页版在浏览器中读取本地 `.mcap` 或录像 `.zip`，录像不会上传到服务器。网页版支持单个 MCAP，以及多相机、分段录像会话 ZIP；在本机自动解包、按公共同步帧对齐并播放。MCAP 内部压缩 Chunk 仍暂不支持。
 
 ## 启动
 
@@ -33,4 +33,4 @@ python3 data_pipeline/offline/scripts/rtcamera-offline serve \
 - [迁移方案](data_pipeline/offline/CLOUDFLARE_PAGES_MIGRATION_PLAN.md)
 - [验证记录与当前限制](web_pages/VERIFICATION.md)
 
-发布包位于 `web_pages/release/rtcamera-pages-trial.zip`。试用版在浏览器本地处理单个未压缩 MCAP，ZIP 和完整兼容解码仍使用上述 Python 入口。
+发布包位于 `web_pages/release/rtcamera-pages-trial.zip`。网页版在浏览器本地处理 MCAP、Stored/Deflate ZIP 和完整分段会话，支持 ZIP64；单段会话也可下载合并 MCAP。需要浏览器不支持的视频编码或其他完整兼容能力时，使用上述 Python 入口。

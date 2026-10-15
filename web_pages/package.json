@@ -8,7 +8,7 @@
     "build": "node scripts/build.mjs",
     "build:cloudflare": "npm run fetch-assets && npm test && npm run build",
     "preview": "node scripts/preview.mjs",
-    "test": "node test/recording.test.mjs",
+    "test": "node test/recording.test.mjs && node test/zip.test.mjs",
     "fetch-assets": "python3 scripts/fetch_assets.py",
     "package": "npm run build && python3 scripts/package.py"
   }

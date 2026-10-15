@@ -79,7 +79,7 @@ export function sbr2Info(bytes) {
   }
   return {global: u64(bytes, 24), epoch: u32(bytes, 32), pulse: u64(bytes, 40), clock: u32(bytes, 68), descriptors};
 }
-function timing(messages, start) {
+export function timing(messages, start) {
   const stamps = messages.map(m => m.publish), intervals = stamps.slice(1).map((n, i) => Number(n - stamps[i]));
   const positive = intervals.filter(n => n > 0).sort((a, b) => a - b), median = positive[Math.floor(positive.length / 2)] || 0;
   return {times: stamps.map(n => Number(n - start) / 1e9), timestamps_ns: stamps.map(String),
@@ -98,6 +98,7 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
   const source = new FileReadable(file, options), started = performance.now();
   const channels = new Map(), schemas = new Map(), streams = new Map(), metadata = new Map(), messages = new Map(), sensors = new Map();
   const maxMessages = options.maxMessages ?? 1_000_000, maxFrames = options.maxFrames ?? 250_000;
+  const definitions=[],records=[];
   let count = 0, frameCount = 0, start = null, end = null, lastProgress = 0;
   const append = (map, key, value) => { if (!map.has(key)) map.set(key, []); map.get(key).push(value); };
   async function recordHeader(offset, limit) {
@@ -123,6 +124,7 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
         const bytes = await source.read(rec.offset, rec.length);
         if (bytes.length < 2) throw Error('Schema record 过短');
         schemas.set(u16(bytes, 0), stringAt(bytes, 2)[0]);
+        if(options.captureRecords)definitions.push({opcode:3,id:u16(bytes,0),offset:rec.offset,length:rec.length});
       } else if (rec.opcode === 4) {
         const bytes = await source.read(rec.offset, rec.length);
         if (bytes.length < 4) throw Error('Channel record 过短');
@@ -136,6 +138,7 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
         const id = u16(bytes, 0);
         if (channels.has(id)) throw Error('Data Section 包含重复 Channel ID');
         channels.set(id, {id, schema: u16(bytes, 2), topic, encoding, values});
+        if(options.captureRecords)definitions.push({opcode:4,id,schema:u16(bytes,2),offset:rec.offset,length:rec.length});
       } else if (rec.opcode === 5) {
         if (rec.length < 22) throw Error('Message record 过短');
         if (++count > maxMessages) throw Error('试用版消息数上限为 ' + maxMessages.toLocaleString() + '；请拆分录制');
@@ -145,6 +148,8 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
         if (start === null || message.publish < start) start = message.publish;
         if (end === null || message.publish > end) end = message.publish;
         append(messages, channel.id, message);
+        const captured=options.captureRecords?{channel:channel.id,topic:channel.topic,sequence:message.sequence,publish:String(message.publish),log:String(message.log),offset:rec.offset,length:rec.length}:null;
+        if(captured)records.push(captured);
         const schema = schemas.get(channel.schema) || '', payloadOffset = rec.offset + 22, payloadLength = rec.length - 22;
         if (/\/metadata\/raw$/.test(channel.topic)) {
           const info = sbr2Info(await source.read(payloadOffset, payloadLength));
@@ -154,6 +159,7 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
         } else if (/imu|encoder/i.test(schema)) {
           const parsed = fields(await source.read(payloadOffset, payloadLength)), sourceName = parsed.get(2);
           const name = sourceName ? text.decode(sourceName.bytes) : channel.topic.split('/').at(-1);
+          if(captured)captured.source=name;
           append(sensors, channel.id + '\0' + name, {channel, source: name, message});
         }
         if (channel.encoding === 'protobuf' && /\/(compressed|video\/encoded)$/.test(channel.topic)) {
@@ -257,6 +263,7 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
         rate_hz: stats.median_interval_ns ? 1e9 / stats.median_interval_ns : 0, log_publish_mismatches: entries.filter(e => e.log !== e.publish).length,
         source_count: sensorRows.filter(row => row.topic === channel.topic).length};
     });
+    if(options.captureRecords)for(const rec of records)if(rec.source)rec.source=aliasOf(rec.source);
     // A shared pulse is meaningful only within the same clock generation/epoch.
     const maps = streamRows.map(row => new Map(row.sync_frame_ids.flatMap((pulse, i) => pulse === null ? [] :
       [[row.clock_generations[i] + ':' + row.sync_epochs[i] + ':' + pulse, BigInt(row.timestamps_ns[i])]])));
@@ -274,6 +281,6 @@ export async function indexRecording(file, onProgress = () => {}, options = {}) 
       alignment: {common_frames: spans.length, min_span_ns: spans[0] || 0, max_span_ns: spans.at(-1) || 0,
         p95_span_ns: spans[Math.round((spans.length - 1) * 0.95)] || 0, exact_frame_counts: new Set(streamRows.map(s => s.frame_count)).size === 1,
         log_publish_alignment: topics.every(t => !t.log_publish_mismatches)}, streams: streamRows, sensor_streams: sensorRows, topics,
-      local_diagnostics: {reader: 'bounded-sequential-trial', footer, bytes_read: source.bytesRead, max_messages: maxMessages, max_frames: maxFrames}}, locators};
+      local_diagnostics: {reader: 'bounded-sequential-trial', footer, bytes_read: source.bytesRead, max_messages: maxMessages, max_frames: maxFrames}}, locators, ...(options.captureRecords?{definitions,records}:{} )};
   } finally { source.close(); }
 }

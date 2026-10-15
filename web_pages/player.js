@@ -452,6 +452,7 @@ function setTimestampExpanded(value){
 function fillInspector(data){
   const fileSummary=$('#file-summary');fileSummary.replaceChildren();
   const fileFacts=[['文件',data.name],['路径',data.path],['大小',formatBytes(data.size_bytes)],['消息总数',data.message_count.toLocaleString()],['开始 publish_time',formatTimestamp(data.start_timestamp_ns)+' s'],['结束 publish_time',formatTimestamp(data.end_timestamp_ns)+' s']];
+  if(data.local_diagnostics.reader==='local-zip-virtual-merge')fileFacts.push(['会话文件',data.local_diagnostics.files+' 个 MCAP'],['完整分段',data.local_diagnostics.segments+' 段']);
   for(const [label,value] of fileFacts){const item=document.createElement('div');item.innerHTML='<span></span><code></code>';item.querySelector('span').textContent=label;item.querySelector('code').textContent=value;fileSummary.append(item);}
   const alignment=data.alignment,summary=$('#alignment-summary');summary.replaceChildren();
   const facts=[['公共帧',alignment.common_frames.toLocaleString()],['P95 偏差',formatIntervalNs(alignment.p95_span_ns)],['最大偏差',formatIntervalNs(alignment.max_span_ns)],['帧数一致',alignment.exact_frame_counts?'是':'否'],['时间戳一致',alignment.log_publish_alignment?'是':'否'],['解析耗时',data.parse_ms.toFixed(1)+' ms']];
@@ -489,7 +490,7 @@ function installRecording(data){
   recording=data;
   $('#hand-camera').replaceChildren(new Option('全部可见相机','all'),...data.streams.map(stream=>new Option(stream.label,String(stream.id))));
   timelineZoom=1;timelineStart=0;setInspectorOpen(false);
-  $('#download-merged-button').hidden=true;
+  $('#download-merged-button').hidden=!data.merged_download;
   $('#recording-name').textContent=data.name;$('#recording-name').title=data.name;$('#recording-path').textContent=data.path;$('#recording-path').title=data.path;
   $('#fact-duration').textContent=formatTime(data.duration);$('#fact-size').textContent=formatBytes(data.size_bytes);
   $('#fact-messages').textContent=data.message_count.toLocaleString();$('#fact-start').textContent=new Date(Number(BigInt(data.start_timestamp_ns)/1000000n)).toLocaleString();
@@ -498,7 +499,7 @@ function installRecording(data){
 }
 async function openLocalFile(file){
   if(!file)return;
-  if(!/\.mcap$/i.test(file.name)){showMessage('试用版请选择 .mcap 文件；ZIP 请先用原本地播放器处理',true);return;}
+  if(!/\.(mcap|zip)$/i.test(file.name)){showMessage('请选择本机 .mcap 或录像 .zip 文件',true);return;}
   importController?.abort();
   const controller=new AbortController();importController=controller;
   setPlaying(false);stopPlayers();hands.disable();$('#hand-enabled').checked=false;$('#hand-state').textContent='已关闭';
@@ -511,11 +512,12 @@ async function openLocalFile(file){
   cancelImport.hidden=false;setState('正在本地建立索引');
   let candidate=null;
   try{
-    candidate=await LocalRecording.open(file,{signal:controller.signal,onProgress:({bytes,total})=>{
+    candidate=await LocalRecording.open(file,{signal:controller.signal,onProgress:({bytes,total,stage})=>{
       if(importController!==controller)return;
       const percent=total>0?Math.floor(bytes/total*100):null;
-      setState(percent===null?'正在本地建立索引':'本地索引 '+percent+'%');
-      setImportProgress(file,percent,percent===null?'正在建立索引':percent+'%');
+      const label=stage==='extract'?'本地解包':'本地索引';
+      setState(percent===null?label:label+' '+percent+'%');
+      setImportProgress(file,percent,percent===null?label:label+' '+percent+'%');
     }});
     if(importController===controller)setImportProgress(file,100,'正在检查解码支持');
     const data=candidate.metadata,support=new Map();
@@ -534,13 +536,31 @@ async function openLocalFile(file){
   }catch(error){
     candidate?.close();
     if(importController!==controller)return;
-    if(error.name==='AbortError'){setState('已取消打开');$('#open-feedback').textContent='已取消，可重新选择本机 MCAP';return;}
+    if(error.name==='AbortError'){setState('已取消打开');$('#open-feedback').textContent='已取消，可重新选择 MCAP 或 ZIP';return;}
     stopPlayers();localRecording?.close();localRecording=null;recording=null;
     playerRoot.hidden=true;emptyState.hidden=false;$('#open-card').dataset.status='error';$('#open-feedback').textContent=error.message;setState('打开失败','error');showMessage(error.message,true);
   }finally{
     if(importController===controller){$('#import-progress').hidden=true;if($('#open-card').dataset.status==='loading')delete $('#open-card').dataset.status;cancelImport.hidden=true;importController=null;localFileInput.value='';}
   }
 }
+$('#download-merged-button').addEventListener('click',async()=>{
+  const session=localRecording,button=$('#download-merged-button');
+  if(!session?.metadata?.merged_download)return;
+  button.disabled=true;button.textContent='正在导出…';
+  try{
+    if(typeof window.showSaveFilePicker==='function'){
+      const handle=await window.showSaveFilePicker({suggestedName:session.metadata.name.replace(/\.zip$/i,'')+'-merged.mcap',types:[{description:'MCAP 录制',accept:{'application/octet-stream':['.mcap']}}]});
+      const {stream}=session.exportMerged();await stream.pipeTo(await handle.createWritable());
+    }else{
+      const {stream,size,name}=session.exportMerged();
+      if(size>256*1024*1024){await stream.cancel();throw Error('此浏览器的大文件下载需要 Chrome/Edge 文件保存功能；可使用本地完整版导出');}
+      const blob=await new Response(stream).blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+      link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }
+    showMessage('已在本机生成合并 MCAP');
+  }catch(error){if(error.name!=='AbortError')showMessage('导出失败：'+error.message,true);}
+  finally{button.disabled=false;button.textContent='下载合并 MCAP';}
+});
 localFileButton.addEventListener('click',()=>localFileInput.click());
 for(const button of document.querySelectorAll('[data-open-file]'))button.addEventListener('click',()=>localFileInput.click());
 localFileInput.addEventListener('change',()=>openLocalFile(localFileInput.files[0]));
